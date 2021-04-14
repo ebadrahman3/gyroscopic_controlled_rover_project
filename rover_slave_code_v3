@@ -1,0 +1,165 @@
+// Motor pins
+#define enA 9
+#define in1 4
+#define in2 5
+#define enB 10
+#define in3 6
+#define in4 7
+
+#define fanLogicPin 2 // Fan Pin
+
+// Recieved data from master controller
+int forward = 0;
+int backward = 0;
+int right = 0;
+int left = 0;
+int buttonState = 0;
+
+int fanState = 0; // 1 if the fan is on, 0 if the fan is off
+
+int prevButtonState = 0; // the previous buttonState value
+
+void setup() {
+  
+  pinMode(fanLogicPin, OUTPUT); // set fan pin as output
+
+  // Motor control pins
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  pinMode(in1, INPUT);
+  pinMode(in2, INPUT);
+  pinMode(in3, INPUT);
+  pinMode(in4, INPUT);
+  
+  Serial.begin(38400); // Default communication rate of the Bluetooth module
+}
+  
+void loop() {
+ while (Serial.available() > 3){ // Checks whether data is comming from the serial port
+    forward = Serial.read(); // Reads the data from the serial port
+
+    Serial.print("Foward: ");
+    Serial.println(forward);
+    
+    
+    backward = Serial.read(); // Reads the data from the serial 
+
+    Serial.print("Backward: ");
+    Serial.println(backward);
+    
+
+    right = Serial.read(); // Reads the data from the serial 
+
+    Serial.print("Right: ");
+    Serial.println(right);
+    
+
+    left = Serial.read(); // Reads the data from the serial 
+
+    Serial.print("Left: ");
+    Serial.println(left);
+    
+
+    buttonState = Serial.read(); // Reads the data from the serial 
+
+    Serial.print("Button State: ");
+    Serial.println(buttonState);
+    
+    
+    delay(100);
+
+    
+    Serial.println("------------------------------------------------------"); 
+    
+ }
+ // Send low level control to motor driver to move forward
+ if (forward) {
+
+  moveforward();
+    analogWrite(enA, forward);
+    analogWrite(enB, forward);
+    Serial.println("Going Forward!");
+  
+  }
+  
+ // Send low level control to motor driver to move backward
+ if (backward) {
+
+    moveback();
+    analogWrite(enA, backward);
+    analogWrite(enB, backward);
+    Serial.println("Going Backward!");
+  
+  }
+
+ // Send low level control to motor driver to move right
+ if (right) {
+  
+    moveforward();
+    analogWrite(enA, right);
+    analogWrite(enB, 0);
+    Serial.println("Going right!");
+  
+  }
+
+ // Send low level control to motor driver to move left
+ if (left) {
+
+    moveforward();
+    analogWrite(enA, 0);
+    analogWrite(enB, left);
+    Serial.println("Going left!");
+  
+  }  
+
+  // Stop if the controller is leveled
+  if (forward==0 && backward==0 && left==0 && right==0) {
+
+    moveforward();
+    analogWrite(enA, 0);
+    analogWrite(enB, 0);
+    Serial.println("Stop!");
+  
+  } 
+
+  // Turn the fan on if the button is pressed
+  if (buttonState==1 && fanState==0 && prevButtonState != 1){
+    
+    Serial.println("Turn Fan on!");
+    digitalWrite(fanLogicPin, HIGH);
+    fanState = 1;
+    
+    }
+
+  // Turn fan off if the button is pressed again
+  else if (buttonState==1 && fanState==1 && prevButtonState != 1){
+
+    Serial.println("Turn Fan off!");
+    digitalWrite(fanLogicPin, LOW);
+    fanState = 0;
+    
+    }
+   prevButtonState = buttonState;
+   
+ delay(100);
+}
+
+void moveforward(){
+    // Set Motor A forward
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
+    
+    // Set Motor B forward
+    digitalWrite(in3, HIGH);
+    digitalWrite(in4, LOW); 
+}
+
+void moveback(){
+    // Set Motor A backward
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
+    
+    // Set Motor B backward
+    digitalWrite(in3, LOW);
+    digitalWrite(in4, HIGH); 
+}
