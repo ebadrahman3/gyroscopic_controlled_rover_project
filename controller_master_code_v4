@@ -1,0 +1,214 @@
+
+// includes and variable definitions
+#include <Wire.h>
+
+#define buttonPin 8 // pin the push button will be connected to
+
+int buttonState = 0; // state is either button pressed (1) or unpressed (0)
+
+// Initialize varibles that carry the PWM signal
+int turnRight; 
+int turnLeft ;
+int goForward;
+int goBackward;
+
+// Initialized Processed Sensor Variables
+int xForce;
+int yForce;
+int zForce;
+
+// I2C address of the MPU ( as shown on data sheet)
+// If ADO is driven high then address changes to 0x45 in binary, which makes it useful to link two of these modules to the same bus
+const int MPU_addr = 0x68;
+
+// Initialize pre-processed Sensor Varibles
+long accelX, accelY, accelZ;
+float gForceX, gForceY, gForceZ;
+
+
+void setup() {
+  
+  pinMode(buttonPin, INPUT); // Define the pushbutton pin as input
+  
+  Serial.begin(38400); // Default communication rate of the Bluetooth module
+  
+  // Begin I2C Comm
+  Wire.begin();
+  setupMPU();
+
+}
+
+void loop() {
+
+/////////////////////////////////////// Process Sensor Data to PWM Signal /////////////////////////////////////////////////
+
+  recordAccelRegisters(); //reccord accell sensor measurements
+
+  // Scale up measured data
+  xForce = long(gForceX*100);
+  yForce = long(gForceY*100);
+  zForce = long(gForceZ*100);
+  
+  
+  // Calculate Roll and Pitch (rotation around X-axis, rotation around Y-axis)
+  float roll = atan(yForce / sqrt(pow(xForce, 2) + pow(zForce, 2))) * 180 / PI;
+  float pitch = atan(-1 * xForce / sqrt(pow(yForce, 2) + pow(zForce, 2))) * 180 / PI;
+
+  // turn right if tilted right
+  if (0 < roll < 70){
+    turnRight = map(roll, 0, 45, 0, 255);
+
+    // if PWM signal is too low to actuate motors, set it to 0
+    if (turnRight < 130){
+      turnRight = 0;
+      }
+
+    // Cap values mapped outside PWM signal range 
+    else if (turnRight > 255){
+      turnRight = 255;
+      }     
+    } 
+
+  // if roll is outside accpetable range, there should be no PWM signal command
+  else{
+    turnRight = 0;
+    }
+
+        
+  // turn left if tilted left
+  if (roll < 0){
+    turnLeft = map(roll, -45, 0, 255, 0);
+
+    // if PWM signal is too low to actuate motors, set it to 0
+    if (turnLeft < 130){
+      turnLeft = 0;
+      }
+      
+    // Cap values mapped outside PWM signal range 
+    else if (turnLeft > 255){
+      turnLeft = 255;
+      }
+    }
+
+  // if roll is outside accpetable range, there should be no PWM signal command
+  else{
+    turnLeft = 0;
+    }
+    
+
+  // Go foward if tilted forward
+  if (0 < pitch < 70){
+    goForward = map(pitch, 0, 45, 0, 255);
+
+    // if PWM signal is too low to actuate motors, set it to 0
+    if (goForward < 130){
+      goForward = 0;
+    }
+
+    // Cap values mapped outside PWM signal range 
+    else if (goForward > 255){
+      goForward = 255;
+    }    
+  }
+
+  // if pitch is outside accpetable range, there should be no PWM signal command
+  else{
+    goForward = 0;
+    }
+
+    
+  // go backwards if tilted backwards
+  if (pitch < 0){
+    goBackward = map(pitch, -45, 0, 255, 0);
+
+    // if PWM signal is too low to actuate motors, set it to 0
+    if (goBackward < 130){
+      goBackward = 0;
+    }
+
+    // Cap values mapped outside PWM signal range 
+    else if (goBackward > 255){
+      goBackward = 255;
+    }   
+  }
+
+  // if pitch is outside accpetable range, there should be no PWM signal command
+  else{
+    goBackward = 0;
+    }
+
+
+  buttonState = digitalRead(buttonPin); // last but not least, read the button state
+
+  
+  // Send information to slave if values are diffrent from previous values
+ if ( goBackward|| goForward || turnLeft  || turnRight ){
+
+   Serial.write(goForward); 
+   Serial.write(goBackward);
+   Serial.write(turnRight); 
+   Serial.write(turnLeft); 
+   Serial.write(buttonState); 
+   
+   delay(100); // delay so slave has time to recieve and process the data
+ 
+ }
+
+ // Send information to stop the drive when the controller is leveled
+ else if ( (goBackward == 0 && goForward == 0) && ( (turnLeft == 0 && turnRight == 0)  ) ){
+
+
+   Serial.write(0); 
+   Serial.write(0); 
+   Serial.write(0); 
+   Serial.write(0); 
+   Serial.write(buttonState);
+   
+   delay(100); // delay so slave has time to recieve and process the data
+  }
+  
+  delay(100); // slow down the loop
+ 
+}
+
+
+/////////////////////////////////////// Establish Comm with MPU and setup registors/////////////////////////////////////////////////
+inline void setupMPU(){
+  
+  // Begin transmission to the slave device on the I2C bus
+  Wire.beginTransmission(MPU_addr); 
+  //Accessing the register 6B for Power Management 
+  Wire.write(0x6B); 
+  //Setting all bits to 0 to wake up device 
+  Wire.write(0x0); 
+  // End the transmission to device
+  Wire.endTransmission();  
+  
+  Wire.beginTransmission(MPU_addr);
+  //Accessing the register 1C for Acccelerometer Configuration
+  Wire.write(0x1C); 
+  //Setting the accel to +/- 2g,Meaning gyro can only detect forces up to 2g
+  //See data sheet to change the range if project requires detection of greater force
+  //The greater the range the lower the sensitivity 
+  Wire.write(0x0); 
+  Wire.endTransmission(); 
+}
+
+//////////////////////////////////////////////////Read Sensor Readings ////////////////////////////////////////////////////////////
+inline void recordAccelRegisters() {
+  Wire.beginTransmission(MPU_addr); 
+  //Starting register for Accel Readings
+  Wire.write(0x3B);
+  Wire.endTransmission();
+  //Request Accel Registers (3B - 40)
+  Wire.requestFrom(MPU_addr, 6);
+  while(Wire.available() < 6);
+  accelX = Wire.read()<<8|Wire.read(); //Store first two bytes into accelX
+  accelY = Wire.read()<<8|Wire.read(); //Store middle two bytes into accelY
+  accelZ = Wire.read()<<8|Wire.read(); //Store last two bytes into accelZ
+
+  // process data in the registers
+  gForceX = accelX / 16384.0;
+  gForceY = accelY / 16384.0; 
+  gForceZ = accelZ / 16384.0;
+}
