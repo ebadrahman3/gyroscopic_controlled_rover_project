@@ -4,18 +4,15 @@
 
 #define buttonPin 8 // pin the push button will be connected to
 
-int buttonState = 0; // state is either button pressed or unpressed
+int buttonState = 0; // state is either button pressed (1) or unpressed (0)
 
-int turnRight = 0; 
-int turnLeft = 0;
-int goForward = 0;
-int goBackward = 0;
+// Initialize varibles that carry the PWM signal
+int turnRight; 
+int turnLeft ;
+int goForward;
+int goBackward;
 
-int prevTurnRight; 
-int prevTurnLeft;
-int prevGoForward; 
-int prevGoBackward;
-
+// Initialized Processed Sensor Variables
 int xForce;
 int yForce;
 int zForce;
@@ -24,13 +21,14 @@ int zForce;
 // If ADO is driven high then address changes to 0x45 in binary, which makes it useful to link two of these modules to the same bus
 const int MPU_addr = 0x68;
 
+// Initialize pre-processed Sensor Varibles
 long accelX, accelY, accelZ;
 float gForceX, gForceY, gForceZ;
 
 
 void setup() {
   
-  pinMode(buttonPin, INPUT);
+  pinMode(buttonPin, INPUT); // Define the pushbutton pin as input
   
   Serial.begin(38400); // Default communication rate of the Bluetooth module
   
@@ -43,7 +41,8 @@ void setup() {
 void loop() {
 
 /////////////////////////////////////// Process Sensor Data to PWM Signal /////////////////////////////////////////////////
-  recordAccelData(); //reccord accell sensor measurements
+
+  recordAccelRegisters(); //reccord accell sensor measurements
 
   // Scale up measured data
   xForce = long(gForceX*100);
@@ -56,19 +55,19 @@ void loop() {
   float pitch = atan(-1 * xForce / sqrt(pow(yForce, 2) + pow(zForce, 2))) * 180 / PI;
 
   // turn right if tilted right
-  if (0 <= roll < 70){
-    turnRight = map(roll, 0, 45, 0, 255); // map pitch angle to PWM signal
-    
-    // if PWM signal is too low to acuate motors, set it to 0
+  if (0 < roll < 70){
+    turnRight = map(roll, 0, 45, 0, 255);
+
+    // if PWM signal is too low to actuate motors, set it to 0
     if (turnRight < 130){
       turnRight = 0;
       }
 
-    // Cap values mapped outside PWM signal range    
+    // Cap values mapped outside PWM signal range 
     else if (turnRight > 255){
       turnRight = 255;
       }     
-    }
+    } 
 
   // if roll is outside accpetable range, there should be no PWM signal command
   else{
@@ -77,20 +76,20 @@ void loop() {
 
         
   // turn left if tilted left
-  if (-70 < roll < 0){
-    turnLeft = map(roll, -45, 0, 255, 0); // map pitch angle to PWM signal
+  if (roll < 0){
+    turnLeft = map(roll, -45, 0, 255, 0);
 
-    // if PWM signal is too low to acuate motors, set it to 0
+    // if PWM signal is too low to actuate motors, set it to 0
     if (turnLeft < 130){
       turnLeft = 0;
       }
-
-     // Cap values mapped outside PWM signal range
-     else if (turnLeft > 255){
+      
+    // Cap values mapped outside PWM signal range 
+    else if (turnLeft > 255){
       turnLeft = 255;
       }
     }
-    
+
   // if roll is outside accpetable range, there should be no PWM signal command
   else{
     turnLeft = 0;
@@ -98,15 +97,15 @@ void loop() {
     
 
   // Go foward if tilted forward
-  if (0 <= pitch < 70){
-    goForward = map(pitch, 0, 45, 0, 255); // map pitch angle to PWM signal
+  if (0 < pitch < 70){
+    goForward = map(pitch, 0, 45, 0, 255);
 
-    // if PWM signal is too low to acuate motors, set it to 0
+    // if PWM signal is too low to actuate motors, set it to 0
     if (goForward < 130){
       goForward = 0;
     }
 
-    // Cap values mapped outside PWM signal range
+    // Cap values mapped outside PWM signal range 
     else if (goForward > 255){
       goForward = 255;
     }    
@@ -119,19 +118,18 @@ void loop() {
 
     
   // go backwards if tilted backwards
-  if (-70 < pitch < 0){
-    goBackward = map(pitch, -45, 0, 255, 0); // map pitch angle to PWM signal
+  if (pitch < 0){
+    goBackward = map(pitch, -45, 0, 255, 0);
 
-    // if PWM signal is too low to acuate motors, set it to 0
+    // if PWM signal is too low to actuate motors, set it to 0
     if (goBackward < 130){
       goBackward = 0;
     }
 
-    // Cap values mapped outside PWM signal range
+    // Cap values mapped outside PWM signal range 
     else if (goBackward > 255){
       goBackward = 255;
-    } 
-        
+    }   
   }
 
   // if pitch is outside accpetable range, there should be no PWM signal command
@@ -142,7 +140,6 @@ void loop() {
 
   buttonState = digitalRead(buttonPin); // last but not least, read the button state
 
-/////////////////////////////////////// Send Info to Slave Device /////////////////////////////////////////////////
   
   // Send information to slave if values are diffrent from previous values
  if ( goBackward|| goForward || turnLeft  || turnRight ){
@@ -153,7 +150,7 @@ void loop() {
    Serial.write(turnLeft); 
    Serial.write(buttonState); 
    
-   delay(250); // delay so slave has time to recieve and process the data
+   delay(100); // delay so slave has time to recieve and process the data
  
  }
 
@@ -167,15 +164,10 @@ void loop() {
    Serial.write(0); 
    Serial.write(buttonState);
    
-   delay(250); // delay so slave has time to recieve and process the data
+   delay(100); // delay so slave has time to recieve and process the data
   }
-
-  // Record the previous value of each PWM Signal
-  prevGoBackward = goBackward;
-  prevGoForward  =  goForward;
-  prevTurnRight = turnRight;
-  prevTurnLeft = turnLeft;
-  delay(250); // slow down the loop
+  
+  delay(100); // slow down the loop
  
 }
 
@@ -202,8 +194,8 @@ inline void setupMPU(){
   Wire.endTransmission(); 
 }
 
-//////////////////////////////////////////////////Read Sensor Data ////////////////////////////////////////////////////////////
-inline void recordAccelData() {
+//////////////////////////////////////////////////Read Sensor Readings ////////////////////////////////////////////////////////////
+inline void recordAccelRegisters() {
   Wire.beginTransmission(MPU_addr); 
   //Starting register for Accel Readings
   Wire.write(0x3B);
